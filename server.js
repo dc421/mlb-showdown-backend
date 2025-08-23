@@ -30,7 +30,7 @@ const pool = new Pool({
 
 // --- Middleware ---
 const corsOptions = {
-  origin: 'https://YOUR-SITE-NAME.netlify.app' // Replace with your live Netlify URL
+  origin: 'https://willowy-griffin-457413.netlify.app' // Replace with your live Netlify URL
 };
 app.use(cors(corsOptions));
 app.use(express.json());  // Enable parsing of JSON request bodies
