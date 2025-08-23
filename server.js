@@ -6,7 +6,6 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const express = require('express');
-const cors = require('cors');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken'); // Add this line
@@ -43,21 +42,17 @@ async function checkDbConnection() {
 checkDbConnection();
 
 // --- Middleware ---
-const corsOptions = {
-  origin: 'https://willowy-griffin-457413.netlify.app'
-};
-app.use(cors(corsOptions));
-app.use(express.json());  // Enable parsing of JSON request bodies
+app.use(express.json());
 
-// Custom Middleware for Debugging and Forcing CORS Headers
+// Custom Middleware to Handle CORS and Logging
 app.use((req, res, next) => {
   console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
-  // The line below is the most important part.
+  // Manually set the CORS header to allow your Netlify site
   res.setHeader('Access-Control-Allow-Origin', 'https://willowy-griffin-457413.netlify.app');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Handle the browser's preflight OPTIONS request.
+  // Handle the browser's preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
