@@ -30,6 +30,18 @@ const pool = new Pool({
   }
 });
 
+// Add this block RIGHT AFTER you define the 'pool'
+async function checkDbConnection() {
+  try {
+    await pool.query('SELECT NOW()'); // A simple, fast query to test connection
+    console.log('✅ Database connection successful!');
+  } catch (error) {
+    console.error('❌ DATABASE CONNECTION FAILED:', error);
+    process.exit(1); // Exit the process with an error code
+  }
+}
+checkDbConnection();
+
 // --- Middleware ---
 const corsOptions = {
   origin: 'https://willowy-griffin-457413.netlify.app'
