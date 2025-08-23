@@ -49,6 +49,22 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());  // Enable parsing of JSON request bodies
 
+// Custom Middleware for Debugging and Forcing CORS Headers
+app.use((req, res, next) => {
+  console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
+  // The line below is the most important part.
+  res.setHeader('Access-Control-Allow-Origin', 'https://willowy-griffin-457413.netlify.app');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,Authorization');
+
+  // Handle the browser's preflight OPTIONS request.
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
 // --- API Routes ---
 
 // USER REGISTRATION
