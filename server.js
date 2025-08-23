@@ -18,16 +18,20 @@ const fs = require('fs');
 const csv = require('csv-parser');
 
 // --- Database Connection ---
-const pool = new Pool({
+const dbConfig = {
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
   database: process.env.DB_DATABASE,
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
+};
+
+// Only add the SSL setting if we are in production
+if (process.env.NODE_ENV === 'production') {
+  dbConfig.ssl = { rejectUnauthorized: false };
+}
+
+const pool = new Pool(dbConfig);
 
 // Add this block RIGHT AFTER you define the 'pool'
 async function checkDbConnection() {
@@ -44,15 +48,22 @@ checkDbConnection();
 // --- Middleware ---
 app.use(express.json());
 
-// Custom Middleware to Handle CORS and Logging
+// Custom Middleware to Handle CORS for multiple origins
 app.use((req, res, next) => {
-  console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
-  // Manually set the CORS header to allow your Netlify site
-  res.setHeader('Access-Control-Allow-Origin', 'https://willowy-griffin-457413.netlify.app');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  const allowedOrigins = [
+    'https://willowy-griffin-457413.netlify.app', // Your live frontend
+    'http://localhost:5173'                         // Your local frontend
+  ];
+  const origin = req.headers.origin;
 
-  // Handle the browser's preflight OPTIONS request
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+
+  console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-control-allow-headers', 'Content-Type, Authorization');
+
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
