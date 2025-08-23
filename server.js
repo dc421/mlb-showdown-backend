@@ -29,7 +29,10 @@ const pool = new Pool({
 });
 
 // --- Middleware ---
-app.use(cors());          // Enable Cross-Origin Resource Sharing
+const corsOptions = {
+  origin: 'https://YOUR-SITE-NAME.netlify.app' // Replace with your live Netlify URL
+};
+app.use(cors(corsOptions));
 app.use(express.json());  // Enable parsing of JSON request bodies
 
 // --- API Routes ---
