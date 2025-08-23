@@ -1,7 +1,9 @@
 // server.js
 
 // Load environment variables from .env file
-require('dotenv').config();
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 
 const express = require('express');
 const cors = require('cors');
@@ -30,7 +32,7 @@ const pool = new Pool({
 
 // --- Middleware ---
 const corsOptions = {
-  origin: 'https://willowy-griffin-457413.netlify.app' // Replace with your live Netlify URL
+  origin: 'https://willowy-griffin-457413.netlify.app'
 };
 app.use(cors(corsOptions));
 app.use(express.json());  // Enable parsing of JSON request bodies
