@@ -1,4 +1,4 @@
-// server.js - FINAL CORRECTED VERSION
+// server.js - FINAL, COMPLETE, UNABRIDGED VERSION
 
 // Load environment variables from .env file
 if (process.env.NODE_ENV !== 'production') {
@@ -103,7 +103,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// CREATE A NEW ROSTER
+// ROSTERS & CARDS
 app.post('/api/rosters', authenticateToken, async (req, res) => {
     const { roster_name, card_ids } = req.body;
     const userId = req.user.userId;
@@ -137,7 +137,6 @@ app.post('/api/rosters', authenticateToken, async (req, res) => {
     }
 });
 
-// GET A USER'S ROSTERS
 app.get('/api/rosters', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     try {
@@ -149,7 +148,6 @@ app.get('/api/rosters', authenticateToken, async (req, res) => {
     }
 });
 
-// GET ALL PLAYER CARDS
 app.get('/api/cards/player', authenticateToken, async (req, res) => {
     try {
         const allCards = await pool.query('SELECT card_id, name, team, positions, points, speed FROM cards_player ORDER BY name');
@@ -160,7 +158,7 @@ app.get('/api/cards/player', authenticateToken, async (req, res) => {
     }
 });
 
-// CREATE A NEW GAME
+// GAME SETUP & PLAY
 app.post('/api/games', authenticateToken, async (req, res) => {
     const { roster_id, home_or_away, league_designation } = req.body;
     const userId = req.user.userId;
@@ -184,7 +182,6 @@ app.post('/api/games', authenticateToken, async (req, res) => {
     }
 });
 
-// JOIN AN EXISTING GAME
 app.post('/api/games/:gameId/join', authenticateToken, async (req, res) => {
     const { gameId } = req.params;
     const { roster_id } = req.body;
@@ -225,7 +222,6 @@ app.post('/api/games/:gameId/join', authenticateToken, async (req, res) => {
     }
 });
 
-// GET A SPECIFIC GAME'S STATE AND EVENTS
 app.get('/api/games/:gameId', authenticateToken, async (req, res) => {
     const { gameId } = req.params;
     try {
@@ -241,7 +237,6 @@ app.get('/api/games/:gameId', authenticateToken, async (req, res) => {
     }
 });
 
-// PLAY A TURN
 app.post('/api/games/:gameId/play', authenticateToken, async (req, res) => {
     const { gameId } = req.params;
     const userId = req.user.userId;
@@ -308,6 +303,7 @@ app.get('/api/test', async (req, res) => {
         res.status(500).json({ message: 'Error connecting to the database.' });
     }
 });
+
 
 // --- Server Startup Function ---
 async function startServer() {
