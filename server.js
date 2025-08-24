@@ -1,6 +1,4 @@
-// server.js - FINAL, COMPLETE VERSION
-
-console.log(`--- SERVER FILE RELOADED AT: ${new Date().toLocaleTimeString()} ---`);
+// server.js - FINAL CORRECTED VERSION
 
 // Load environment variables from .env file
 if (process.env.NODE_ENV !== 'production') {
@@ -31,17 +29,6 @@ if (process.env.NODE_ENV === 'production') {
 
 const pool = new Pool(dbConfig);
 
-async function checkDbConnection() {
-  try {
-    await pool.query('SELECT NOW()');
-    console.log('✅ Database connection successful!');
-  } catch (error) {
-    console.error('❌ DATABASE CONNECTION FAILED:', error);
-    process.exit(1);
-  }
-}
-checkDbConnection();
-
 // --- Middleware ---
 app.use(express.json());
 
@@ -54,9 +41,8 @@ app.use((req, res, next) => {
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
-  console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-control-allow-headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -323,7 +309,23 @@ app.get('/api/test', async (req, res) => {
     }
 });
 
-// --- Start the Server (MUST BE AT THE VERY END) ---
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+// --- Server Startup Function ---
+async function startServer() {
+  try {
+    // Wait for the database connection to be established
+    await pool.query('SELECT NOW()');
+    console.log('✅ Database connection successful!');
+
+    // Only start listening for requests AFTER the database is ready
+    app.listen(PORT, () => {
+      console.log(`Server is running on http://localhost:${PORT}`);
+    });
+
+  } catch (error) {
+    console.error('❌ DATABASE CONNECTION FAILED:', error);
+    process.exit(1);
+  }
+}
+
+// --- Run the Server ---
+startServer();
