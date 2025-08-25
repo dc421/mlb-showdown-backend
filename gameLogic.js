@@ -2,9 +2,9 @@
 
 function applyOutcome(state, outcome) {
   const newState = JSON.parse(JSON.stringify(state)); // Deep copy to modify
-  const offensiveTeamKey = newState.isTopInning ? 'awayTeam' : 'homeTeam';
   const scoreKey = newState.isTopInning ? 'awayScore' : 'homeScore';
   let runnersAdvanced = 0;
+  const events = [`${batterName} gets a ${outcome}!`]; // Start with the at-bat outcome
 
   // --- Handle the Outcome ---
   
@@ -75,22 +75,21 @@ function applyOutcome(state, outcome) {
 
   // --- Handle Inning Change ---
   if (newState.outs >= 3) {
-    newState.isTopInning = !newState.isTopInning; // Switch from Top to Bottom or vice-versa
-    if (newState.isTopInning) {
-      newState.inning++; // If we are back to the top, it's a new inning
-    }
+    newState.isTopInning = !newState.isTopInning;
+    if (newState.isTopInning) newState.inning++;
     newState.outs = 0;
-    newState.bases = { first: null, second: null, third: null }; // Clear bases
+    newState.bases = { first: null, second: null, third: null };
+    // Add the new inning event
+    events.push(`--- ${newState.isTopInning ? 'Top' : 'Bottom'} of the ${newState.inning} ---`);
   }
   
-  // --- Advance Batter in the Order ---
+  const offensiveTeamKey = newState.isTopInning ? 'awayTeam' : 'homeTeam';
   newState[offensiveTeamKey].battingOrderPosition++;
-  // Reset batting order after 9 batters (simple version)
   if (newState[offensiveTeamKey].battingOrderPosition >= 9) {
     newState[offensiveTeamKey].battingOrderPosition = 0;
   }
 
-  return newState;
+  return { newState, events };
 }
 
 // Make the function available to other files
