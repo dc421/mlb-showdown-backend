@@ -122,21 +122,19 @@ app.post('/api/rosters', authenticateToken, async (req, res) => {
 
     const client = await pool.connect();
     try {
-        const cardsQuery = await client.query('SELECT card_id, points, fielding_ratings, ip FROM cards_player WHERE card_id = ANY($1::int[])', [card_ids]);
+        const cardsQuery = await client.query('SELECT card_id, name, points, fielding_ratings, ip, control FROM cards_player WHERE card_id = ANY($1::int[])', [card_ids]);
         const cards = cardsQuery.rows;
 
         if (cards.length !== 20) {
             return res.status(400).json({ message: 'One or more invalid card IDs were provided.' });
         }
         
-        // --- CORRECTED POSITION VALIDATION LOGIC ---
         const starters = cards.filter(c => starter_ids.includes(c.card_id));
         const startingPitchers = starters.filter(c => Number(c.ip) > 3);
         const positionPlayers = starters.filter(c => c.control === null);
-
         const positionCounts = { C: 0, '2B': 0, SS: 0, '3B': 0, CF: 0, LFRF: 0 };
+        
         positionPlayers.forEach(card => {
-            // Check the keys of the fielding_ratings object
             const positions = card.fielding_ratings ? Object.keys(card.fielding_ratings) : [];
             if (positions.includes('C')) positionCounts.C++;
             if (positions.includes('2B')) positionCounts['2B']++;
@@ -147,14 +145,22 @@ app.post('/api/rosters', authenticateToken, async (req, res) => {
         });
 
         const errors = [];
-        if (startingPitchers.length !== 4) errors.push('You must have exactly 4 Starting Pitchers among your starters.');
-        if (positionPlayers.length !== 9) errors.push('You must have exactly 9 position players among your starters.');
+        // NEW: Check for duplicate names
+        const cardNames = cards.map(c => c.name);
+        const uniqueCardNames = new Set(cardNames);
+        if (uniqueCardNames.size < cardNames.length) {
+            errors.push('You cannot have two players with the same name on your roster.');
+        }
+
+        if (starters.length !== 13) errors.push(`You must designate exactly 13 starters (${starters.length} designated).`)
+        if (startingPitchers.length !== 4) errors.push(`You must have exactly 4 Starting Pitchers among your starters (${startingPitchers.length} selected).`);
+        if (positionPlayers.length !== 9) errors.push(`You must have exactly 9 position players among your starters (${positionPlayers.length} selected).`);
         if (positionCounts.C < 1) errors.push('Your starters need at least 1 Catcher.');
         if (positionCounts['2B'] < 1) errors.push('Your starters need at least 1 Second Baseman.');
         if (positionCounts.SS < 1) errors.push('Your starters need at least 1 Shortstop.');
         if (positionCounts['3B'] < 1) errors.push('Your starters need at least 1 Third Baseman.');
         if (positionCounts.CF < 1) errors.push('Your starters need at least 1 Center Fielder.');
-        if (positionCounts.LFRF < 2) errors.push('Your starters need at least 2 LF/RF.');
+        if (positionCounts.LFRF < 2) errors.push('Your starters need at least 2 LF/RFs.');
         
         if (errors.length > 0) {
             return res.status(400).json({ message: 'Invalid roster composition.', errors: errors });
@@ -165,7 +171,6 @@ app.post('/api/rosters', authenticateToken, async (req, res) => {
             return res.status(400).json({ message: `Roster is over the 5000 point limit. Total: ${totalPoints}` });
         }
 
-        // --- SAVE TO DATABASE ---
         await client.query('BEGIN');
         const newRoster = await client.query('INSERT INTO rosters (user_id, roster_name) VALUES ($1, $2) RETURNING roster_id', [userId, roster_name]);
         const rosterId = newRoster.rows[0].roster_id;
