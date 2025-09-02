@@ -5,16 +5,19 @@ function applyOutcome(state, outcome, batter, pitcher, infieldDefense = 0) {
   const scoreKey = newState.isTopInning ? 'awayScore' : 'homeScore';
   const events = [];
   
-  const runnerData = { runner: batter, pitcherOfRecordId: pitcher.card_id };
-
+const runnerData = { 
+    ...batter, // Copy all properties from the batter (name, speed, etc.)
+    pitcherOfRecordId: pitcher.card_id 
+  };
+  
   const scoreRun = (runnerOnBase) => {
     if (!runnerOnBase) return;
     newState[scoreKey]++;
+    events.push(`${runnerOnBase.name} scores!`);
     const pitcherId = runnerOnBase.pitcherOfRecordId;
     if (newState.pitcherStats[pitcherId]) {
       newState.pitcherStats[pitcherId].runs++;
     } else {
-      // This case handles if a pitcher's stats haven't been initialized yet
       newState.pitcherStats[pitcherId] = { ip: 0, runs: 1 };
     }
   };
@@ -25,16 +28,41 @@ function applyOutcome(state, outcome, batter, pitcher, infieldDefense = 0) {
   }
 
   // --- HANDLE OUTCOMES ---
-  if (outcome === 'SAC BUNT') {
-    events.push(`${batter.displayName} lays down a sacrifice bunt!`);
-    newState.outs++;
-    if (newState.outs < 3) {
-      if (newState.bases.third) { scoreRun(newState.bases.third); newState.bases.third = newState.bases.second; }
-      else if (newState.bases.second) { newState.bases.third = newState.bases.second; }
-      if (newState.bases.first) { newState.bases.second = newState.bases.first; }
-      newState.bases.first = null;
+  // in gameLogic.js
+if (outcome === 'SAC BUNT') {
+    const { first, second, third } = state.bases;
+    events.push(`${batter.displayName} lays down a sacrifice bunt.`);
+    
+    // Case 3: Bases loaded -> Fielder's choice, out at home
+    if (first && second && third) {
+        newState.outs++;
+        newState.bases.third = state.bases.second;
+        newState.bases.second = state.bases.first;
+        newState.bases.first = runnerData;
+        events.push('The throw goes home... OUT at the plate!');
     }
-  }
+    // Case 1: Runner on 3rd only, or 2nd and 3rd -> Runners hold
+    else if ((third && !first && !second) || (third && second && !first)) {
+        newState.outs++;
+        events.push('The runners hold, and the batter is out at first.');
+    }
+    // Case 2: Runners on 1st and 3rd -> Runner on 1st advances
+    else if (first && third && !second) {
+        newState.outs++;
+        newState.bases.second = state.bases.first;
+        newState.bases.first = null;
+        events.push('The runner from first advances to second.');
+    }
+    // Case 4 (Otherwise): Normal sacrifice, runners advance
+    else {
+        newState.outs++;
+        if (newState.outs < 3) {
+            if (second) { newState.bases.third = state.bases.second; newState.bases.second = null; }
+            if (first) { newState.bases.second = state.bases.first; newState.bases.first = null; }
+        }
+        events.push('The sacrifice is successful.');
+    }
+}
   else if (outcome.includes('GB')) {
     if (state.infieldIn && newState.outs < 2 && newState.bases.third) {
         newState.atBatStatus = 'infield-in-decision';

@@ -5,12 +5,8 @@ const csv = require('csv-parser');
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_DATABASE,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-  ssl: false
+  user: process.env.DB_USER, host: process.env.DB_HOST, database: process.env.DB_DATABASE,
+  password: process.env.DB_PASSWORD, port: process.env.DB_PORT, ssl: false
 });
 
 function createChartData(row, isPitcher = false) {
@@ -19,7 +15,6 @@ function createChartData(row, isPitcher = false) {
     const outcomes = isPitcher 
       ? ['PU', 'SO', 'GB', 'FB', 'BB', '1B', '2B', 'HR']
       : ['SO', 'GB', 'FB', 'BB', '1B', '1B+', '2B', '3B', 'HR'];
-
     outcomes.forEach(outcome => {
         const value = parseInt(row[outcome], 10);
         if (value > 0) {
@@ -34,11 +29,7 @@ function createChartData(row, isPitcher = false) {
 async function processCsv(filePath) {
   return new Promise((resolve, reject) => {
     const records = [];
-    fs.createReadStream(filePath)
-      .pipe(csv())
-      .on('data', (row) => records.push(row))
-      .on('end', () => resolve(records))
-      .on('error', reject);
+    fs.createReadStream(filePath).pipe(csv()).on('data', (row) => records.push(row)).on('end', () => resolve(records)).on('error', reject);
   });
 }
 
@@ -47,7 +38,6 @@ async function ingestData() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    console.log('Clearing existing card data...');
     await client.query('TRUNCATE TABLE cards_player RESTART IDENTITY CASCADE');
     
     const hitters = await processCsv('hitters.csv');
@@ -58,7 +48,6 @@ async function ingestData() {
     for (const playerRow of allPlayersRaw) {
       const name = `${playerRow.First} ${playerRow.Last}`;
       const key = `${name}|${playerRow.Set}|${playerRow.Num}`;
-
       if (uniquePlayers.has(key)) {
         const existingPlayer = uniquePlayers.get(key);
         if (playerRow.Pos && playerRow.Fld) {
@@ -73,9 +62,6 @@ async function ingestData() {
       }
     }
     
-    console.log(`Read ${allPlayersRaw.length} rows, de-duplicated to ${uniquePlayers.size} unique player cards.`);
-    console.log('Inserting cards into database...');
-
     for (const row of uniquePlayers.values()) {
       const isPitcher = !!row.Ctl;
       const fielding_ratings = {};
@@ -88,6 +74,8 @@ async function ingestData() {
       const card = {
         name: `${row.First} ${row.Last}`,
         team: row.Tm,
+        set_name: row.Set,
+        card_number: parseInt(row.Num, 10), // <-- ADD THIS LINE
         year: 2001,
         points: parseInt(row.Pts, 10) || null,
         on_base: isPitcher ? null : parseInt(row.OB, 10) || null,
@@ -98,8 +86,8 @@ async function ingestData() {
         chart_data: createChartData(row, isPitcher),
       };
       
-      const insertQuery = `INSERT INTO cards_player (name, team, year, points, on_base, control, ip, speed, fielding_ratings, chart_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
-      const values = [card.name, card.team, card.year, card.points, card.on_base, card.control, card.ip, card.speed, card.fielding_ratings, card.chart_data];
+      const insertQuery = `INSERT INTO cards_player (name, team, set_name, card_number, year, points, on_base, control, ip, speed, fielding_ratings, chart_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`;
+      const values = [card.name, card.team, card.set_name, card.card_number, card.year, card.points, card.on_base, card.control, card.ip, card.speed, card.fielding_ratings, card.chart_data];
       await client.query(insertQuery, values);
     }
 
@@ -113,5 +101,4 @@ async function ingestData() {
     await pool.end();
   }
 }
-
 ingestData();
