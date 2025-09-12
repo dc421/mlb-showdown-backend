@@ -1,15 +1,13 @@
-// gameLogic.js - DEFINITIVE FINAL VERSION
-
 function applyOutcome(state, outcome, batter, pitcher, infieldDefense = 0) {
   const newState = JSON.parse(JSON.stringify(state));
   const scoreKey = newState.isTopInning ? 'awayScore' : 'homeScore';
   const events = [];
   
-const runnerData = { 
-    ...batter, // Copy all properties from the batter (name, speed, etc.)
+  const runnerData = { 
+    ...batter,
     pitcherOfRecordId: pitcher.card_id 
   };
-  
+
   const scoreRun = (runnerOnBase) => {
     if (!runnerOnBase) return;
     newState[scoreKey]++;
@@ -22,52 +20,22 @@ const runnerData = {
     }
   };
   
-  // The initial event is added only if it's not a decision state
-  if (!outcome.includes('GB') && !outcome.includes('FB') && !outcome.includes('1B') && !outcome.includes('2B')) {
-      events.push(`${batter.displayName} gets a ${outcome}!`);
-  }
-
   // --- HANDLE OUTCOMES ---
-  // in gameLogic.js
-if (outcome === 'SAC BUNT') {
-    const { first, second, third } = state.bases;
+  if (outcome === 'SAC BUNT') {
     events.push(`${batter.displayName} lays down a sacrifice bunt.`);
-    
-    // Case 3: Bases loaded -> Fielder's choice, out at home
-    if (first && second && third) {
-        newState.outs++;
-        newState.bases.third = state.bases.second;
-        newState.bases.second = state.bases.first;
-        newState.bases.first = runnerData;
-        events.push('The throw goes home... OUT at the plate!');
+    newState.outs++;
+    if (newState.outs < 3) {
+      if (newState.bases.third) { scoreRun(newState.bases.third); }
+      if (newState.bases.second) { newState.bases.third = newState.bases.second; }
+      if (newState.bases.first) { newState.bases.second = newState.bases.first; }
+      newState.bases.first = null;
     }
-    // Case 1: Runner on 3rd only, or 2nd and 3rd -> Runners hold
-    else if ((third && !first && !second) || (third && second && !first)) {
-        newState.outs++;
-        events.push('The runners hold, and the batter is out at first.');
-    }
-    // Case 2: Runners on 1st and 3rd -> Runner on 1st advances
-    else if (first && third && !second) {
-        newState.outs++;
-        newState.bases.second = state.bases.first;
-        newState.bases.first = null;
-        events.push('The runner from first advances to second.');
-    }
-    // Case 4 (Otherwise): Normal sacrifice, runners advance
-    else {
-        newState.outs++;
-        if (newState.outs < 3) {
-            if (second) { newState.bases.third = state.bases.second; newState.bases.second = null; }
-            if (first) { newState.bases.second = state.bases.first; newState.bases.first = null; }
-        }
-        events.push('The sacrifice is successful.');
-    }
-}
+  }
   else if (outcome.includes('GB')) {
     if (state.infieldIn && newState.outs < 2 && newState.bases.third) {
         newState.atBatStatus = 'infield-in-decision';
         events.push(`${batter.displayName} hits a ground ball with the infield in...`);
-        newState.infieldInDecision = { runner: newState.bases.third, batter: batter };
+        newState.currentPlay = { type: 'INFIELD_IN', runner: newState.bases.third, batter: runnerData };
     }
     else if (newState.outs <= 1 && newState.bases.first) {
         const dpRoll = Math.floor(Math.random() * 20) + 1;
@@ -81,89 +49,68 @@ if (outcome === 'SAC BUNT') {
             newState.bases.first = runnerData;
         }
     } else {
-        events.push(`${batter.displayName} gets a ${outcome}!`);
+        events.push(`${batter.displayName} grounds out.`);
         newState.outs++;
         if (newState.outs < 3 && !state.infieldIn) {
-            if (newState.bases.third) { scoreRun(newState.bases.third); newState.bases.third = newState.bases.second; }
-            else if (newState.bases.second) { newState.bases.third = newState.bases.second; }
+            if (newState.bases.third) { scoreRun(newState.bases.third); }
+            if (newState.bases.second) { newState.bases.third = newState.bases.second; }
             newState.bases.second = null;
         }
     }
   }
- else if (outcome.includes('FB')) {
+  else if (outcome.includes('FB')) {
     newState.outs++;
     if (newState.outs < 3 && (newState.bases.first || newState.bases.second || newState.bases.third)) {
         newState.atBatStatus = 'offensive-baserunning-decision';
         events.push(`${batter.displayName} flies out.`);
-        newState.currentPlay = {
-          batter: null, // Batter is out
-          hitType: 'FB',
-          decisions: [ // Tag-up decisions
-            { runner: state.bases.third, from: 3, to: 4, isAuto: false },
-            { runner: state.bases.second, from: 2, to: 3, isAuto: false },
-            { runner: state.bases.first, from: 1, to: 2, isAuto: false },
-          ].filter(d => d.runner)
-        };
+        newState.currentPlay = { hitType: 'FB', decisions: [
+            { runner: state.bases.third, from: 3 },
+            { runner: state.bases.second, from: 2 },
+            { runner: state.bases.first, from: 1 },
+        ].filter(d => d.runner) };
     } else {
         events.push(`${batter.displayName} flies out.`);
     }
   }
   else if (outcome === 'SINGLE' || outcome === '1B' || outcome === '1B+') {
       events.push(`${batter.displayName} hits a SINGLE!`);
-      
-
-  // First, figure out what the potential decisions are
-  const decisions = [
-    { runner: state.bases.second, from: 2 }, // Runner from 2nd can try for home
-    { runner: state.bases.first, from: 1 },  // Runner from 1st can try for 3rd
-  ].filter(d => d.runner);
-
-      // Automatically advance any forced runners
-  if (newState.bases.third) { scoreRun(newState.bases.third); newState.bases.third = null; }
-  if (newState.bases.second) { newState.bases.third = newState.bases.second; newState.bases.second = null; }
-  if (newState.bases.first) { newState.bases.second = newState.bases.first; }
-  newState.bases.first = runnerData;
-      
-  // Handle 1B+ automatic advance
-  if (outcome === '1B+' && !newState.bases.second) {
-      newState.bases.second = newState.bases.first;
-      newState.bases.first = null;
-      events.push(`${batter.displayName} steals second base!`);
-  }
-      // NOW, check if there are any decisions left to be made
-  else if (decisions.length > 0) {
-    newState.atBatStatus = 'offensive-baserunning-decision';
-    newState.currentPlay = {
-      hitType: '1B',
-      decisions: decisions
-    };
-  }
+      const decisions = [
+        { runner: state.bases.second, from: 2 },
+        { runner: state.bases.first, from: 1 },
+      ].filter(d => d.runner);
+      if (newState.bases.third) { scoreRun(newState.bases.third); newState.bases.third = null; }
+      if (newState.bases.second) { newState.bases.third = newState.bases.second; newState.bases.second = null; }
+      if (newState.bases.first) { newState.bases.second = newState.bases.first; }
+      newState.bases.first = runnerData;
+      if (outcome === '1B+' && !newState.bases.second) {
+          newState.bases.second = newState.bases.first;
+          newState.bases.first = null;
+          events.push(`${batter.displayName} steals second base!`);
+      } else if (decisions.length > 0) {
+          newState.atBatStatus = 'offensive-baserunning-decision';
+          newState.currentPlay = { hitType: '1B', decisions: decisions };
+      }
   }
   else if (outcome === '2B') {
       events.push(`${batter.displayName} hits a DOUBLE!`);
-  const runnerFromThird = state.bases.third; // Check for a runner on 3rd BEFORE moving anyone
-  
-  // Handle automatic baserunner advancement
-  if (newState.bases.second) { scoreRun(newState.bases.second); newState.bases.second = null; }
-  if (newState.bases.first) { newState.bases.third = newState.bases.first; newState.bases.first = null; }
-  newState.bases.second = runnerData;
-
-  // Now, ONLY enter a decision state if there was a runner on third
-  if (runnerFromThird) {
-    newState.atBatStatus = 'offensive-baserunning-decision';
-    newState.currentPlay = {
-      hitType: '2B',
-      decisions: [{ runner: runnerFromThird, from: 3 }]
-    };
-  }
+      const runnerFromThird = state.bases.third;
+      if (newState.bases.second) { scoreRun(newState.bases.second); newState.bases.second = null; }
+      if (newState.bases.first) { newState.bases.third = newState.bases.first; newState.bases.first = null; }
+      newState.bases.second = runnerData;
+      if (runnerFromThird) {
+        newState.atBatStatus = 'offensive-baserunning-decision';
+        newState.currentPlay = { hitType: '2B', decisions: [{ runner: runnerFromThird, from: 3 }] };
+      }
   }
   else if (outcome === 'BB') {
-    if (newState.bases.first && newState.bases.second && newState.bases.third) { scoreRun(newState.bases.first); }
+    events.push(`${batter.displayName} walks.`);
+    if (newState.bases.first && newState.bases.second && newState.bases.third) { scoreRun(newState.bases.third); }
     if (newState.bases.first && newState.bases.second) { newState.bases.third = newState.bases.second; }
     if (newState.bases.first) { newState.bases.second = newState.bases.first; }
     newState.bases.first = runnerData;
   }
   else if (outcome === '3B') {
+    events.push(`${batter.displayName} hits a TRIPLE!`);
     if (newState.bases.third) { scoreRun(newState.bases.third); }
     if (newState.bases.second) { scoreRun(newState.bases.second); }
     if (newState.bases.first) { scoreRun(newState.bases.first); }
@@ -172,13 +119,21 @@ if (outcome === 'SAC BUNT') {
     newState.bases.first = null;
   }
   else if (outcome === 'HR') {
+    events.push(`${batter.displayName} hits a HOME RUN!`);
     if (newState.bases.third) { scoreRun(newState.bases.third); }
     if (newState.bases.second) { scoreRun(newState.bases.second); }
     if (newState.bases.first) { scoreRun(newState.bases.first); }
-    scoreRun({ pitcherOfRecordId: pitcher.card_id }); // Batter scores
+    scoreRun(runnerData);
     newState.bases = { first: null, second: null, third: null };
   }
+  else if (outcome === 'SO') {
+    events.push(`${batter.displayName} strikes out.`);
+  }
+  else if (outcome === 'HR') {
+    events.push(`${batter.displayName} pops out.`);
+  }
   else { 
+    events.push(`${batter.displayName} is out.`);
     newState.outs++;
   }
 
@@ -193,12 +148,10 @@ if (outcome === 'SAC BUNT') {
   if (newState.outs >= 3 && !newState.gameOver) {
     const wasTop = newState.isTopInning;
     newState.isTopInning = !newState.isTopInning;
-    if (newState.isTopInning) {
-      newState.inning++;
-    }
+    if (newState.isTopInning) newState.inning++;
     newState.outs = 0;
     newState.bases = { first: null, second: null, third: null };
-    events.push(`--- ${newState.isTopInning ? 'Top' : 'Bottom'} of the ${newState.inning} ---`);
+    // The inning change event itself is now created in server.js
   }
   
   return { newState, events };
