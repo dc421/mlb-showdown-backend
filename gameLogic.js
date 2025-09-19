@@ -128,10 +128,12 @@ function applyOutcome(state, outcome, batter, pitcher, infieldDefense = 0) {
   }
   else if (outcome === 'SO') {
     events.push(`${batter.displayName} strikes out.`);
+    newState.outs++;
   }
-  else if (outcome === 'HR') {
+  else if (outcome === 'PU') {
     events.push(`${batter.displayName} pops out.`);
-  }
+    newState.outs++;
+}
   else { 
     events.push(`${batter.displayName} is out.`);
     newState.outs++;

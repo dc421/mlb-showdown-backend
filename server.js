@@ -351,7 +351,10 @@ app.post('/api/games/:gameId/lineup', authenticateToken, async (req, res) => {
       processPlayers([startingPitcherCard], allCardsResult.rows);
 
       const inningChangeEvent = `<strong>--- Top of the 1st --- (Now Pitching: ${startingPitcherCard.displayName})</strong>`;
-      await client.query(
+      // --- ADD THIS LOG ---
+    console.log(`🔫 SERVER: Creating initial event for game ${gameId}:`, inningChangeEvent);
+
+    await client.query(
         `INSERT INTO game_events (game_id, turn_number, event_type, log_message) VALUES ($1, $2, $3, $4)`,
         [gameId, 1, 'system', inningChangeEvent]
       );
@@ -853,11 +856,31 @@ app.post('/api/games/:gameId/set-action', authenticateToken, async (req, res) =>
       }
       const { newState, events } = applyOutcome(finalState, outcome, batter, pitcher);
       finalState = { ...newState, atBatStatus: 'reveal-outcome' };
-      finalState.currentAtBat.swingRollResult = { roll: swingRoll, outcome, batter };
+      finalState.currentAtBat.swingRollResult = { roll: swingRoll, outcome, batter, eventCount: events.length };
       
-      for (const logMessage of events) { 
-        await client.query(`INSERT INTO game_events (game_id, user_id, turn_number, event_type, log_message) VALUES ($1, $2, $3, $4, $5)`, [gameId, userId, currentTurn + 1, 'game_event', logMessage]);
+      
+      if (events && events.length > 0) {
+          const originalOuts = finalState.outs - (newState.outs - currentState.outs);
+          const originalScore = (finalState.awayScore + finalState.homeScore) - (newState.awayScore - currentState.awayScore) - (newState.homeScore - currentState.homeScore);
+
+          // --- ADD THESE DEBUG LOGS ---
+        console.log('--- SET ACTION OUTS DEBUG ---');
+        console.log('Original Outs:', originalOuts);
+        console.log('Final Outs:', finalState.outs);
+        // --- End of Debug Logs ---
+
+
+          let combinedLogMessage = events.join(' ');
+          if (finalState.outs > originalOuts) {
+              const outsForLog = finalState.outs === 0 ? 3 : finalState.outs;
+              combinedLogMessage += ` <strong>Outs: ${outsForLog}</strong>`;
+          }
+          if ((finalState.awayScore + finalState.homeScore) > originalScore) {
+              combinedLogMessage += ` <strong>Score: ${finalState.awayScore}-${finalState.homeScore}</strong>`;
+          }
+          await client.query(`INSERT INTO game_events (game_id, user_id, turn_number, event_type, log_message) VALUES ($1, $2, $3, $4, $5)`, [gameId, userId, currentTurn + 1, 'game_event', combinedLogMessage]);
       }
+      
       await client.query('UPDATE games SET current_turn_user_id = $1 WHERE game_id = $2', [offensiveTeam.user_id, gameId]);
     }
     
@@ -910,7 +933,14 @@ app.post('/api/games/:gameId/pitch', authenticateToken, async (req, res) => {
         finalState = { ...newState, atBatStatus: 'reveal-outcome' };
         finalState.currentAtBat.pitcherAction = 'intentional_walk';
         finalState.currentAtBat.batterAction = 'take';
-        events.push(...walkEvents);
+
+        for (const logMessage of events) { 
+          let finalLog = logMessage;
+          if ((finalState.awayScore + finalState.homeScore) > originalScore) {
+              finalLog += ` <strong>(Score: ${finalState.awayScore}-${finalState.homeScore})</strong>`;
+          }
+          await client.query(`INSERT INTO game_events (game_id, user_id, turn_number, event_type, log_message) VALUES ($1, $2, $3, $4, $5)`, [gameId, userId, currentTurn + 1, 'walk', finalLog]);
+        }
         await client.query('UPDATE games SET current_turn_user_id = $1 WHERE game_id = $2', [offensiveTeam.user_id, gameId]);
     } else {
         const pitchRoll = Math.floor(Math.random() * 20) + 1;
@@ -920,7 +950,10 @@ app.post('/api/games/:gameId/pitch', authenticateToken, async (req, res) => {
         finalState.currentAtBat.pitchRollResult = { roll: pitchRoll, advantage, penalty: controlPenalty };
 
         if (finalState.currentAtBat.batterAction) {
+            // --- THIS IS THE FIX ---
             // Batter was waiting, so resolve the whole at-bat now.
+            const originalOuts = finalState.outs;
+            const originalScore = finalState.awayScore + finalState.homeScore;
             let outcome = 'OUT';
             let swingRoll = 0;
             if (finalState.currentAtBat.batterAction === 'bunt') {
@@ -933,21 +966,36 @@ app.post('/api/games/:gameId/pitch', authenticateToken, async (req, res) => {
                     if (swingRoll >= min && swingRoll <= max) { outcome = chartHolder.chart_data[range]; break; }
                 }
             }
-            const { newState, events: outcomeEvents } = applyOutcome(finalState, outcome, batter, pitcher);
+            const { newState, events } = applyOutcome(finalState, outcome, batter, pitcher);
             finalState = { ...newState, atBatStatus: 'reveal-outcome' };
-            finalState.currentAtBat.swingRollResult = { roll: swingRoll, outcome, batter };
-            events.push(...outcomeEvents);
+            finalState.currentAtBat.swingRollResult = { roll: swingRoll, outcome, batter, eventCount: events.length };
+
+            // --- ADD THESE DEBUG LOGS ---
+        console.log('--- PITCH OUTS DEBUG ---');
+        console.log('Original Outs:', originalOuts);
+        console.log('Final Outs:', finalState.outs);
+        // --- End of Debug Logs ---
+            
+            if (events && events.length > 0) {
+          const originalOuts = finalState.outs - (newState.outs - currentState.outs);
+          const originalScore = (finalState.awayScore + finalState.homeScore) - (newState.awayScore - currentState.awayScore) - (newState.homeScore - currentState.homeScore);
+
+          let combinedLogMessage = events.join(' ');
+          if (finalState.outs > originalOuts) {
+              const outsForLog = finalState.outs === 0 ? 3 : finalState.outs;
+              combinedLogMessage += ` <strong>Outs: ${outsForLog}</strong>`;
+          }
+          if ((finalState.awayScore + finalState.homeScore) > originalScore) {
+              combinedLogMessage += ` <strong>(Score: ${finalState.awayScore}-${finalState.homeScore})</strong>`;
+          }
+          await client.query(`INSERT INTO game_events (game_id, user_id, turn_number, event_type, log_message) VALUES ($1, $2, $3, $4, $5)`, [gameId, userId, currentTurn + 1, 'game_event', combinedLogMessage]);
+      }
+
             await client.query('UPDATE games SET current_turn_user_id = $1 WHERE game_id = $2', [offensiveTeam.user_id, gameId]);
-        } else {
-            // Batter has not acted yet. The turn does NOT change.
         }
     }
     
     await client.query('INSERT INTO game_states (game_id, turn_number, state_data) VALUES ($1, $2, $3)', [gameId, currentTurn + 1, finalState]);
-    for (const logMessage of events) { 
-      await client.query(`INSERT INTO game_events (game_id, user_id, turn_number, event_type, log_message) VALUES ($1, $2, $3, $4, $5)`, [gameId, userId, currentTurn + 1, 'game_event', logMessage]);
-    }
-    
     await client.query('COMMIT');
     io.to(gameId).emit('game-updated');
     res.status(200).json({ message: 'Pitch action complete.' });
@@ -1005,11 +1053,17 @@ app.post('/api/games/:gameId/next-hitter', authenticateToken, async (req, res) =
     // If you are the FIRST player to click, advance the game state.
     if (!originalState.homePlayerReadyForNext && !originalState.awayPlayerReadyForNext) {
       // 1. Save the completed at-bat for the other player to see.
-      newState.lastCompletedAtBat = { ...newState.currentAtBat };
+      newState.lastCompletedAtBat = { ...newState.currentAtBat,
+        bases: newState.bases, // Save the bases as they were after the play
+        eventCount: newState.currentAtBat.swingRollResult?.eventCount || 1, // Save the event count
+        outs: newState.outs 
+       };
 
-      // 2. Advance the batting order.
-      const offensiveTeamKey = newState.isTopInning ? 'awayTeam' : 'homeTeam';
-      newState[offensiveTeamKey].battingOrderPosition = (newState[offensiveTeamKey].battingOrderPosition + 1) % 9;
+      const inningDidNotChange = originalState.isTopInning === newState.isTopInning;
+      if (inningDidNotChange) {
+        const offensiveTeamKey = newState.isTopInning ? 'awayTeam' : 'homeTeam';
+        newState[offensiveTeamKey].battingOrderPosition = (newState[offensiveTeamKey].battingOrderPosition + 1) % 9;
+      }
       
       // 3. Create a fresh scorecard for the new at-bat.
       newState.atBatStatus = 'set-actions';
