@@ -336,7 +336,8 @@ app.post('/api/games/:gameId/lineup', authenticateToken, async (req, res) => {
             pitcherAction: null,
             batterAction: null,
             pitchRollResult: null,
-            swingRollResult: null
+            swingRollResult: null,
+            basesBeforePlay: { first: null, second: null, third: null }
         }
       };
 
@@ -1054,7 +1055,7 @@ app.post('/api/games/:gameId/next-hitter', authenticateToken, async (req, res) =
     if (!originalState.homePlayerReadyForNext && !originalState.awayPlayerReadyForNext) {
       // 1. Save the completed at-bat for the other player to see.
       newState.lastCompletedAtBat = { ...newState.currentAtBat,
-        bases: newState.bases, // Save the bases as they were after the play
+        bases: newState.currentAtBat.basesBeforePlay,
         eventCount: newState.currentAtBat.swingRollResult?.eventCount || 1, // Save the event count
         outs: newState.outs 
        };
@@ -1070,9 +1071,10 @@ app.post('/api/games/:gameId/next-hitter', authenticateToken, async (req, res) =
       const { batter, pitcher } = await getActivePlayers(gameId, newState);
       newState.currentAtBat = {
           batter: batter,
-      pitcher: pitcher,
-      pitcherAction: null, batterAction: null,
-      pitchRollResult: null, swingRollResult: null
+          pitcher: pitcher,
+          pitcherAction: null, batterAction: null,
+          pitchRollResult: null, swingRollResult: null,
+          basesBeforePlay: newState.bases
       };
     }
 
